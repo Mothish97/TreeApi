@@ -2,9 +2,13 @@
 FastApi to execute tree CUD operations
 # Python 3.10+ is required to run this project
 
+# For Public Access URL
+https://treeapi.onrender.com
+https://treeapi.onrender.com/docs
+
 # Tree API – FastAPI Project
 
-This is a simple tree-building HTTP API built using **FastAPI** and **SQLite**, supporting:
+This is a simple tree-building HTTP API built using **FastAPI**, **SQLite**, and **PostGres** hosted in cloud using **Renderer** supporting:
 
 - ✅ Create nodes (with parent-child structure)
 - ✅ Fetch the entire tree as nested JSON
