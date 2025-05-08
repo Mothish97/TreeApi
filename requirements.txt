@@ -5,5 +5,5 @@ pydantic
 python-dotenv
 pytest
 httpx
-
+psycopg2-binary
 # Python 3.10+ is required to run this project
