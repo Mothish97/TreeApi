@@ -1,6 +1,6 @@
 # TreeApi
 FastApi to execute tree CUD operations
-
+# Python 3.10+ is required to run this project
 
 # Tree API – FastAPI Project
 

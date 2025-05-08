@@ -6,3 +6,4 @@ python-dotenv
 pytest
 httpx
 
+# Python 3.10+ is required to run this project
