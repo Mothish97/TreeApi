@@ -1,10 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi import status
 from sqlalchemy.orm import Session
 from app.database import SessionLocal
 from app import crud, schemas
 from app.models import TreeNode
 import logging
 from app.exceptions import InvalidParentIDException, NodeNotFoundException
+from app.utils import build_tree,find_subtree_by_id
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -20,7 +22,7 @@ def get_db():
         db.close()
 
 
-@router.post("/tree", response_model=schemas.ResponseWrapper)
+@router.post("/tree", response_model=schemas.ResponseWrapper, status_code=status.HTTP_201_CREATED)
 def create_node(node: schemas.TreeNodeCreate, db: Session = Depends(get_db)):
     """
     Create a new tree node.
@@ -48,45 +50,51 @@ def create_node(node: schemas.TreeNodeCreate, db: Session = Depends(get_db)):
     except Exception as e:
         logger.error(f"Unexpected error while creating node: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal Server Error")
-
+    
 
 @router.get("/tree/{node_id}", response_model=schemas.ResponseWrapper)
 def get_node_by_id(node_id: int, db: Session = Depends(get_db)):
     """
-    Fetch a specific node by its ID.
+    Retrieve a node by its ID, including any children in a nested structure.
 
     Parameters:
-        node_id (int): The ID of the node to retrieve.
+        node_id (int): ID of the node to retrieve.
         db (Session): SQLAlchemy session dependency.
 
     Returns:
-        ResponseWrapper: Node info if found, or error message.
+        ResponseWrapper: Nested node structure starting from node_id, or error.
 
     Raises:
-        NodeNotFoundException: If node does not exist.
-        HTTPException: For internal server errors or key issues.
+        NodeNotFoundException: If no node with the given ID exists.
+        HTTPException: For unexpected server errors.
     """
     try:
-        node = db.query(TreeNode).filter(TreeNode.id == node_id).first()
-        if not node:
+        # Fetch all nodes from the database
+        all_nodes = crud.get_all_nodes(db)
+
+        # Build full hierarchical tree from the flat list
+        full_tree = build_tree(all_nodes)
+
+        # Find the subtree that starts at the given node_id
+        node_subtree = find_subtree_by_id(full_tree, node_id)
+
+        # Raise 404 if node not found in the tree
+        if not node_subtree:
             raise NodeNotFoundException(node_id)
+
         return {
             "code": 200,
             "message": f"Node {node_id} retrieved successfully",
-            "data": {
-                "id": node.id,
-                "label": node.label,
-                "children": []
-            }
+            "data": node_subtree
         }
+
     except (InvalidParentIDException, NodeNotFoundException):
         raise
-    except KeyError as ke:
-        logger.warning(f"KeyError while accessing node {node_id}: {ke}")
-        raise HTTPException(status_code=400, detail=f"Missing field: {str(ke)}")
     except Exception as e:
         logger.error(f"Unhandled error while fetching node {node_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal Server Error")
+
+
 
 
 @router.get("/tree", response_model=schemas.ResponseWrapper)

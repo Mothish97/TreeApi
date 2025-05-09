@@ -2,25 +2,29 @@
 
 from sqlalchemy.orm import Session
 from app import models
+from collections import defaultdict
 
-def build_tree(nodes, parent_id=None):
+def build_tree(nodes):
     """
-    Recursively constructs a tree structure from a flat list of TreeNodes.
+    Constructs tree hierarchy from flat list of nodes in O(n).
 
     :param nodes: List of TreeNode objects.
-    :param parent_id: Parent node ID to match.
-    :return: Nested tree as a list of dictionaries.
+    :return: Tree as nested list of dictionaries.
     """
-    tree = []
+    children_map = defaultdict(list)
+    id_to_node = {}
+
+    # First pass: create basic node dict and group by parent
     for node in nodes:
-        if node.parent_id == parent_id:
-            children = build_tree(nodes, node.id)
-            tree.append({
-                "id": node.id,
-                "label": node.label,
-                "children": children
-            })
-    return tree
+        node_dict = {"id": node.id, "label": node.label, "children": []}
+        id_to_node[node.id] = node_dict
+        children_map[node.parent_id].append(node_dict)
+
+    # Second pass: assign children
+    for node in id_to_node.values():
+        node["children"] = children_map.get(node["id"], [])
+
+    return children_map[None]  
 
 
 def is_descendant(db: Session, descendant_id: int, ancestor_id: int) -> bool:
@@ -48,3 +52,28 @@ def is_descendant(db: Session, descendant_id: int, ancestor_id: int) -> bool:
 
         stack.extend(child_ids)
     return False
+
+def find_subtree_by_id(tree, target_id):
+    """
+    Recursively locate and return the subtree rooted at a specific node ID.
+
+    This function walks through the tree structure, which is a list of nested dictionaries
+    (each representing a node with potential children), and returns the first match found
+    based on the target_id.
+
+    Parameters:
+        tree (list[dict]): The tree structure to search, typically the result of build_tree().
+        target_id (int): The ID of the node to locate in the tree.
+
+    Returns:
+        dict: The subtree rooted at the matching node.
+        None: If no matching node is found in the tree.
+    """
+    for node in tree:
+        if node["id"] == target_id:
+            return node
+        child = find_subtree_by_id(node["children"], target_id)
+        if child:
+            return child
+    return None
+

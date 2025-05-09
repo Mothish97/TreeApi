@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from app import models, schemas
 from app.exceptions import InvalidParentIDException, NodeNotFoundException
-from app.utils import build_tree, is_descendant
+from app.utils import build_tree, is_descendant,find_subtree_by_id
 
 def create_node(db: Session, node: schemas.TreeNodeCreate) -> schemas.TreeNodeResponse:
     """
