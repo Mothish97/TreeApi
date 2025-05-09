@@ -7,3 +7,8 @@ pytest
 httpx
 psycopg2-binary
 # Python 3.10+ is required to run this project
+
+# Additional dependencies for async support and local development
+asyncpg
+aiosqlite
+pytest-asyncio
