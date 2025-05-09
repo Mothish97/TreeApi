@@ -1,7 +1,7 @@
 from sqlalchemy.orm import Session
 from app import models, schemas
 from app.exceptions import InvalidParentIDException, NodeNotFoundException
-
+from app.utils import build_tree, is_descendant
 
 def create_node(db: Session, node: schemas.TreeNodeCreate) -> schemas.TreeNodeResponse:
     """
@@ -143,58 +143,3 @@ def update_node(db: Session, node_id: int, data: schemas.TreeNodeCreate) -> sche
     node = db.query(models.TreeNode).filter(models.TreeNode.id == node_id).first()
 
     return schemas.TreeNodeResponse.model_validate(node)
-
-
-def build_tree(nodes: list[models.TreeNode], parent_id: int = None) -> list[dict]:
-    """
-    Builds a nested tree structure from flat node list.
-
-    Parameters:
-        nodes (List[TreeNode]): List of TreeNode ORM instances.
-        parent_id (int, optional): Parent ID to start from (default is None, root level).
-
-    Returns:
-        List[dict]: A nested tree represented as dictionaries.
-    """
-    tree = []
-    for node in nodes:
-        if node.parent_id == parent_id:
-            children = build_tree(nodes, node.id)
-            tree.append({
-                "id": node.id,
-                "label": node.label,
-                "children": children
-            })
-    return tree
-
-
-def is_descendant(db: Session, descendant_id: int, ancestor_id: int) -> bool:
-    """
-    Checks if `descendant_id` is a descendant (child, grandchild, etc.) of `ancestor_id`.
-
-    Parameters:
-        db (Session): The database session.
-        descendant_id (int): The ID of the potential child node.
-        ancestor_id (int): The node to check ancestry from.
-
-    Returns:
-        bool: True if descendant_id is below ancestor_id, False otherwise.
-    """
-    visited = set()
-    stack = [ancestor_id]
-
-    while stack:
-        current = stack.pop()
-        if current in visited:
-            continue
-        visited.add(current)
-
-        children = db.query(models.TreeNode.id).filter(models.TreeNode.parent_id == current).all()
-        child_ids = [c[0] for c in children]
-
-        if descendant_id in child_ids:
-            return True
-
-        stack.extend(child_ids)
-
-    return False
