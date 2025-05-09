@@ -1,39 +1,161 @@
 from sqlalchemy.orm import Session
 from app import models, schemas
+from app.exceptions import InvalidParentIDException, NodeNotFoundException
 
-# Create a new node in the database
-def create_node(db: Session, node: schemas.TreeNodeCreate):
-    # Check if parentId exists (if given)
+
+def create_node(db: Session, node: schemas.TreeNodeCreate) -> schemas.TreeNodeResponse:
+    """
+    Creates a new node in the tree.
+
+    Parameters:
+        db (Session): The SQLAlchemy database session.
+        node (TreeNodeCreate): The input data for the node, including label and optional parentId.
+
+    Returns:
+        TreeNodeResponse: The created node with ID and label.
+    
+    Raises:
+        InvalidParentIDException: If the specified parentId does not exist.
+    """
     if node.parentId is not None:
         parent = db.query(models.TreeNode).filter(models.TreeNode.id == node.parentId).first()
         if not parent:
-            raise ValueError("Invalid parentId")
+            raise InvalidParentIDException(node.parentId)
 
-    db_node = models.TreeNode(
-        label=node.label,
-        parent_id=node.parentId
-    )
+    db_node = models.TreeNode(label=node.label, parent_id=node.parentId)
     db.add(db_node)
     db.commit()
     db.refresh(db_node)
-    return db_node
 
-# Retrieve all nodes from the database
+    return schemas.TreeNodeResponse.model_validate(db_node)
+
+
 def get_all_nodes(db: Session):
+    """
+    Retrieves all nodes from the database.
+
+    Parameters:
+        db (Session): The database session.
+
+    Returns:
+        List[TreeNode]: List of all TreeNode objects in the database.
+    """
     return db.query(models.TreeNode).all()
 
-#Get Node by id
-def get_node_by_id(db: Session, node_id: int):
-    return db.query(models.TreeNode).filter(models.TreeNode.id == node_id).first()
 
-# Delete all nodes in the database
-def delete_all_nodes(db: Session):
+def get_node_by_id(db: Session, node_id: int) -> schemas.TreeNodeResponse:
+    """
+    Fetch a single node by its ID.
+
+    Parameters:
+        db (Session): The database session.
+        node_id (int): The unique ID of the node to retrieve.
+
+    Returns:
+        TreeNodeResponse: The node data.
+
+    Raises:
+        NodeNotFoundException: If the node with given ID does not exist.
+    """
+    node = db.query(models.TreeNode).filter(models.TreeNode.id == node_id).first()
+    if not node:
+        raise NodeNotFoundException(node_id)
+
+    return schemas.TreeNodeResponse.model_validate(node)
+
+
+def delete_all_nodes(db: Session) -> bool:
+    """
+    Deletes all nodes in the tree.
+
+    Parameters:
+        db (Session): The database session.
+
+    Returns:
+        bool: True if deletion is successful.
+    """
     db.query(models.TreeNode).delete()
     db.commit()
     return True
 
-# Recursively build tree structure from flat list
-def build_tree(nodes, parent_id=None):
+
+def delete_node_by_id(db: Session, node_id: int) -> bool:
+    """
+    Deletes a single node by ID.
+
+    Parameters:
+        db (Session): The database session.
+        node_id (int): The ID of the node to delete.
+
+    Returns:
+        bool: True if deletion was successful.
+
+    Raises:
+        NodeNotFoundException: If the node does not exist.
+    """
+    node = db.query(models.TreeNode).filter(models.TreeNode.id == node_id).first()
+    if not node:
+        raise NodeNotFoundException(node_id)
+
+    db.delete(node)
+    db.commit()
+    return True
+
+
+def update_node(db: Session, node_id: int, data: schemas.TreeNodeCreate) -> schemas.TreeNodeResponse:
+    """
+    Updates an existing node's label or parent.
+
+    Parameters:
+        db (Session): The database session.
+        node_id (int): ID of the node to update.
+        data (TreeNodeCreate): New values for label and/or parentId.
+
+    Returns:
+        TreeNodeResponse: The updated node.
+
+    Raises:
+        NodeNotFoundException: If the node to update doesn't exist.
+        InvalidParentIDException: If new parent is invalid or causes cyclic relationship.
+    """
+    node = db.query(models.TreeNode).filter(models.TreeNode.id == node_id).first()
+    if not node:
+        raise NodeNotFoundException(node_id)
+
+    if data.label:
+        node.label = data.label
+
+    if data.parentId is not None:
+        if data.parentId == node_id:
+            raise InvalidParentIDException("A node cannot be its own parent.")
+
+        parent = db.query(models.TreeNode).filter(models.TreeNode.id == data.parentId).first()
+        if not parent:
+            raise InvalidParentIDException(data.parentId)
+
+        if is_descendant(db, data.parentId, node_id):
+            raise InvalidParentIDException("Cannot set parentId to a descendant node.")
+
+        node.parent_id = data.parentId
+
+    db.commit()
+    db.expire_all()
+    node = db.query(models.TreeNode).filter(models.TreeNode.id == node_id).first()
+
+    return schemas.TreeNodeResponse.model_validate(node)
+
+
+def build_tree(nodes: list[models.TreeNode], parent_id: int = None) -> list[dict]:
+    """
+    Builds a nested tree structure from flat node list.
+
+    Parameters:
+        nodes (List[TreeNode]): List of TreeNode ORM instances.
+        parent_id (int, optional): Parent ID to start from (default is None, root level).
+
+    Returns:
+        List[dict]: A nested tree represented as dictionaries.
+    """
     tree = []
     for node in nodes:
         if node.parent_id == parent_id:
@@ -45,29 +167,34 @@ def build_tree(nodes, parent_id=None):
             })
     return tree
 
-# Update an existing node
-def update_node(db: Session, node_id: int, data: schemas.TreeNodeCreate):
-    node = db.query(models.TreeNode).filter(models.TreeNode.id == node_id).first()
-    if not node:
-        return None
 
-    if data.label:
-        node.label = data.label
-    if data.parentId is not None:
-        parent = db.query(models.TreeNode).filter(models.TreeNode.id == data.parentId).first()
-        if not parent:
-            raise ValueError("Invalid parent ID")
-        node.parent_id = data.parentId
+def is_descendant(db: Session, descendant_id: int, ancestor_id: int) -> bool:
+    """
+    Checks if `descendant_id` is a descendant (child, grandchild, etc.) of `ancestor_id`.
 
-    db.commit()
-    db.refresh(node)
-    return node
+    Parameters:
+        db (Session): The database session.
+        descendant_id (int): The ID of the potential child node.
+        ancestor_id (int): The node to check ancestry from.
 
-# Delete a specific node by ID
-def delete_node_by_id(db: Session, node_id: int):
-    node = db.query(models.TreeNode).filter(models.TreeNode.id == node_id).first()
-    if not node:
-        return False 
-    db.delete(node)
-    db.commit()
-    return True
+    Returns:
+        bool: True if descendant_id is below ancestor_id, False otherwise.
+    """
+    visited = set()
+    stack = [ancestor_id]
+
+    while stack:
+        current = stack.pop()
+        if current in visited:
+            continue
+        visited.add(current)
+
+        children = db.query(models.TreeNode.id).filter(models.TreeNode.parent_id == current).all()
+        child_ids = [c[0] for c in children]
+
+        if descendant_id in child_ids:
+            return True
+
+        stack.extend(child_ids)
+
+    return False
