@@ -44,7 +44,7 @@ def test_non_intrusive_flow():
     del_root = httpx.delete(f"{BASE_URL}/api/tree/{root_id}")
     assert del_root.status_code == 200
 
-    print("✅ test_non_intrusive_flow passed")
+    print("test_non_intrusive_flow passed")
 
 def test_update_parent_and_validate_tree():
     # Step 1: Create two root nodes
@@ -77,9 +77,66 @@ def test_update_parent_and_validate_tree():
     del_parent = httpx.delete(f"{BASE_URL}/api/tree/{parent_id}")
     assert del_parent.status_code == 200
 
-    print("✅ test_update_parent_and_validate_tree passed")
+    print("test_update_parent_and_validate_tree passed")
+
+
+def test_cannot_set_node_as_its_own_parent():
+    # Step 1: Create a node
+    create_response = httpx.post(f"{BASE_URL}/api/tree", json={"label": "self-parent-test"})
+    assert create_response.status_code == 201
+
+    node_data = create_response.json()["data"]
+    node_id = node_data["id"]
+
+    try:
+        # Step 2: Try to update the node to have itself as parent
+        update_response = httpx.put(
+            f"{BASE_URL}/api/tree/{node_id}",
+            json={"label": "invalid-update", "parentId": node_id}
+        )
+
+        # Step 3: Validate that a 400 Bad Request was returned
+        assert update_response.status_code == 400
+        assert "cannot be its own parent" in update_response.text.lower() or "invalidparentid" in update_response.text.lower()
+    
+    finally:
+        # Step 4: Cleanup - delete the node
+        delete_response = httpx.delete(f"{BASE_URL}/api/tree/{node_id}")
+        assert delete_response.status_code == 200
+        print("test_cannot_set_node_as_its_own_parent passed")
+
+def test_create_with_invalid_parent_id():
+    response = httpx.post(f"{BASE_URL}/api/tree", json={"label": "invalid-parent", "parentId": 9999})
+    assert response.status_code == 400
+    assert "parent id" in response.text.lower() and "invalid" in response.text.lower()
+    print("test_create_with_invalid_parent_id passed")
+
+
+def test_cannot_create_circular_relationship():
+    # Create A
+    res_a = httpx.post(f"{BASE_URL}/api/tree", json={"label": "A"})
+    node_a = res_a.json()["data"]
+    id_a = node_a["id"]
+
+    # Create B with parent A
+    res_b = httpx.post(f"{BASE_URL}/api/tree", json={"label": "B", "parentId": id_a})
+    id_b = res_b.json()["data"]["id"]
+
+    try:
+        # Try to update A's parent to B (which would create a cycle)
+        res_update = httpx.put(f"{BASE_URL}/api/tree/{id_a}", json={"label": "A", "parentId": id_b})
+        assert res_update.status_code == 400
+        assert "descendant" in res_update.text.lower()
+    finally:
+        # Cleanup
+        httpx.delete(f"{BASE_URL}/api/tree/{id_a}")
+        httpx.delete(f"{BASE_URL}/api/tree/{id_b}")
+        print("test_cannot_create_circular_relationship passed")
 
 
 if __name__ == "__main__":
     test_non_intrusive_flow()
     test_update_parent_and_validate_tree()
+    test_cannot_set_node_as_its_own_parent()
+    test_create_with_invalid_parent_id()
+    test_cannot_create_circular_relationship()

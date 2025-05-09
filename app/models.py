@@ -5,19 +5,35 @@ from sqlalchemy.orm import relationship
 from app.database import Base
 
 # ─────────────────────────────────────────────────────────────────────────────
-# SQLAlchemy model representing a tree node in the database
-#─────────────────────────────────────────────────────────────────────────────
+# TreeNode model: Represents a hierarchical tree structure using self-reference
+# Each node may have a parent and can contain multiple children (recursive).
+# ─────────────────────────────────────────────────────────────────────────────
 class TreeNode(Base):
-    __tablename__ = "nodes"  # Table name in the database
+    __tablename__ = "nodes"  # Name of the table in the database
 
-    # Unique identifier for each node (Primary Key)
+    # ─────────────────────────────────────────────────────────────────────────
+    # Unique identifier for the node (Primary Key)
+    # ─────────────────────────────────────────────────────────────────────────
     id = Column(Integer, primary_key=True, index=True)
 
-    # The name or label of the node (required)
+    # ─────────────────────────────────────────────────────────────────────────
+    # Descriptive label for the node (Required)
+    # ─────────────────────────────────────────────────────────────────────────
     label = Column(String, nullable=False)
 
-    # Foreign key referencing the parent node (nullable for root nodes)
-    parent_id = Column(Integer, ForeignKey('nodes.id'), nullable=True)
+    # ─────────────────────────────────────────────────────────────────────────
+    # Optional foreign key pointing to the parent node's ID
+    # A null value indicates this node is a root node
+    # ─────────────────────────────────────────────────────────────────────────
+    parent_id = Column(Integer, ForeignKey("nodes.id"), nullable=True)
 
-    # Relationship to access child nodes (self-referential one-to-many)
-    children = relationship("TreeNode")
+    # ─────────────────────────────────────────────────────────────────────────
+    # Reference to the parent node
+    # remote_side=[id] helps SQLAlchemy resolve the self-referential direction
+    # ─────────────────────────────────────────────────────────────────────────
+    parent = relationship("TreeNode", remote_side=[id], backref="children", lazy="selectin")
+
+    # Notes:
+    # - `remote_side=[id]` is required to resolve ambiguity in self-reference
+    # - `backref="children"` creates a reverse-access relationship
+    # - `lazy="selectin"` allows async-safe eager loading for nested tree access

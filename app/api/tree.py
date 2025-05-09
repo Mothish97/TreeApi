@@ -1,35 +1,30 @@
+# app/api/tree.py
+
 from fastapi import APIRouter, Depends, HTTPException
 from fastapi import status
-from sqlalchemy.orm import Session
-from app.database import SessionLocal
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.database import get_db
 from app import crud, schemas
 from app.models import TreeNode
 import logging
 from app.exceptions import InvalidParentIDException, NodeNotFoundException
-from app.utils import build_tree,find_subtree_by_id
+from app.utils import build_tree, find_subtree_by_id
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
 
-def get_db():
-    """
-    Dependency to create and close DB session per request.
-    """
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
 
-
+# ─────────────────────────────────────────────────────────────────────────────
+# Create a new tree node
+# ─────────────────────────────────────────────────────────────────────────────
 @router.post("/tree", response_model=schemas.ResponseWrapper, status_code=status.HTTP_201_CREATED)
-def create_node(node: schemas.TreeNodeCreate, db: Session = Depends(get_db)):
+async def create_node(node: schemas.TreeNodeCreate, db: AsyncSession = Depends(get_db)):
     """
     Create a new tree node.
 
     Parameters:
         node (TreeNodeCreate): Payload containing label and optional parentId.
-        db (Session): SQLAlchemy session dependency.
+        db (AsyncSession): Async SQLAlchemy session dependency.
 
     Returns:
         ResponseWrapper: The created node in standard response format.
@@ -39,7 +34,7 @@ def create_node(node: schemas.TreeNodeCreate, db: Session = Depends(get_db)):
         HTTPException: For internal server errors.
     """
     try:
-        created = crud.create_node(db, node)
+        created = await crud.create_node(db, node)
         return {
             "code": 201,
             "message": "Node created successfully",
@@ -50,16 +45,19 @@ def create_node(node: schemas.TreeNodeCreate, db: Session = Depends(get_db)):
     except Exception as e:
         logger.error(f"Unexpected error while creating node: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal Server Error")
-    
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Retrieve a node by its ID, including any children in a nested structure
+# ─────────────────────────────────────────────────────────────────────────────
 @router.get("/tree/{node_id}", response_model=schemas.ResponseWrapper)
-def get_node_by_id(node_id: int, db: Session = Depends(get_db)):
+async def get_node_by_id(node_id: int, db: AsyncSession = Depends(get_db)):
     """
     Retrieve a node by its ID, including any children in a nested structure.
 
     Parameters:
         node_id (int): ID of the node to retrieve.
-        db (Session): SQLAlchemy session dependency.
+        db (AsyncSession): Async SQLAlchemy session dependency.
 
     Returns:
         ResponseWrapper: Nested node structure starting from node_id, or error.
@@ -69,16 +67,10 @@ def get_node_by_id(node_id: int, db: Session = Depends(get_db)):
         HTTPException: For unexpected server errors.
     """
     try:
-        # Fetch all nodes from the database
-        all_nodes = crud.get_all_nodes(db)
-
-        # Build full hierarchical tree from the flat list
+        all_nodes = await crud.get_all_nodes(db)
         full_tree = build_tree(all_nodes)
-
-        # Find the subtree that starts at the given node_id
         node_subtree = find_subtree_by_id(full_tree, node_id)
 
-        # Raise 404 if node not found in the tree
         if not node_subtree:
             raise NodeNotFoundException(node_id)
 
@@ -95,15 +87,16 @@ def get_node_by_id(node_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
-
-
+# ─────────────────────────────────────────────────────────────────────────────
+# Get the entire tree structure starting from root nodes
+# ─────────────────────────────────────────────────────────────────────────────
 @router.get("/tree", response_model=schemas.ResponseWrapper)
-def get_tree(db: Session = Depends(get_db)):
+async def get_tree(db: AsyncSession = Depends(get_db)):
     """
     Get the entire tree structure starting from root nodes.
 
     Parameters:
-        db (Session): SQLAlchemy session dependency.
+        db (AsyncSession): Async SQLAlchemy session dependency.
 
     Returns:
         ResponseWrapper: A list of root-level nodes with nested children.
@@ -112,8 +105,8 @@ def get_tree(db: Session = Depends(get_db)):
         HTTPException: If the operation fails.
     """
     try:
-        nodes = crud.get_all_nodes(db)
-        tree = crud.build_tree(nodes)
+        nodes = await crud.get_all_nodes(db)
+        tree = build_tree(nodes)
         return {
             "code": 200,
             "message": "Tree retrieved successfully" if tree else "No nodes found",
@@ -124,15 +117,18 @@ def get_tree(db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Update the label or parent of a node
+# ─────────────────────────────────────────────────────────────────────────────
 @router.put("/tree/{node_id}", response_model=schemas.ResponseWrapper)
-def update_node(node_id: int, update_data: schemas.TreeNodeCreate, db: Session = Depends(get_db)):
+async def update_node(node_id: int, update_data: schemas.TreeNodeCreate, db: AsyncSession = Depends(get_db)):
     """
     Update the label or parent of a node.
 
     Parameters:
         node_id (int): ID of the node to update.
         update_data (TreeNodeCreate): New values for label/parentId.
-        db (Session): SQLAlchemy session dependency.
+        db (AsyncSession): Async SQLAlchemy session dependency.
 
     Returns:
         ResponseWrapper: Updated node info.
@@ -143,7 +139,7 @@ def update_node(node_id: int, update_data: schemas.TreeNodeCreate, db: Session =
         HTTPException: For internal server errors.
     """
     try:
-        updated_node = crud.update_node(db, node_id, update_data)
+        updated_node = await crud.update_node(db, node_id, update_data)
         return {
             "code": 200,
             "message": "Node updated successfully",
@@ -156,14 +152,17 @@ def update_node(node_id: int, update_data: schemas.TreeNodeCreate, db: Session =
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Delete a node by its ID
+# ─────────────────────────────────────────────────────────────────────────────
 @router.delete("/tree/{node_id}", response_model=schemas.ResponseWrapper)
-def delete_node(node_id: int, db: Session = Depends(get_db)):
+async def delete_node(node_id: int, db: AsyncSession = Depends(get_db)):
     """
     Delete a node by its ID.
 
     Parameters:
         node_id (int): ID of the node to delete.
-        db (Session): SQLAlchemy session dependency.
+        db (AsyncSession): Async SQLAlchemy session dependency.
 
     Returns:
         ResponseWrapper: Status of deletion.
@@ -173,7 +172,7 @@ def delete_node(node_id: int, db: Session = Depends(get_db)):
         HTTPException: For internal server errors.
     """
     try:
-        crud.delete_node_by_id(db, node_id)
+        await crud.delete_node_by_id(db, node_id)
         return {
             "code": 200,
             "message": f"Node {node_id} deleted successfully",
@@ -186,13 +185,16 @@ def delete_node(node_id: int, db: Session = Depends(get_db)):
         raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Delete all nodes from the database
+# ─────────────────────────────────────────────────────────────────────────────
 @router.delete("/tree", response_model=schemas.ResponseWrapper)
-def delete_all_nodes(db: Session = Depends(get_db)):
+async def delete_all_nodes(db: AsyncSession = Depends(get_db)):
     """
     Delete all nodes from the database.
 
     Parameters:
-        db (Session): SQLAlchemy session dependency.
+        db (AsyncSession): Async SQLAlchemy session dependency.
 
     Returns:
         ResponseWrapper: Deletion status as boolean.
@@ -201,7 +203,7 @@ def delete_all_nodes(db: Session = Depends(get_db)):
         HTTPException: If the deletion fails.
     """
     try:
-        success = crud.delete_all_nodes(db)
+        success = await crud.delete_all_nodes(db)
         return {
             "code": 200,
             "message": "All nodes deleted successfully",

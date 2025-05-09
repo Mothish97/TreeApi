@@ -1,9 +1,13 @@
 # app/utils.py
 
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from app import models
 from collections import defaultdict
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Constructs tree hierarchy from flat list of nodes in O(n)
+# ─────────────────────────────────────────────────────────────────────────────
 def build_tree(nodes):
     """
     Constructs tree hierarchy from flat list of nodes in O(n).
@@ -24,35 +28,46 @@ def build_tree(nodes):
     for node in id_to_node.values():
         node["children"] = children_map.get(node["id"], [])
 
-    return children_map[None]  
+    return children_map[None]
 
 
-def is_descendant(db: Session, descendant_id: int, ancestor_id: int) -> bool:
+# ─────────────────────────────────────────────────────────────────────────────
+# Checks if a node is a descendant of another (async version)
+# ─────────────────────────────────────────────────────────────────────────────
+async def is_descendant(db: AsyncSession, descendant_id: int, ancestor_id: int) -> bool:
     """
     Checks if a node is a descendant of another to prevent cyclic parent-child relationships.
 
-    :param db: SQLAlchemy DB session.
+    :param db: Async SQLAlchemy DB session.
     :param descendant_id: Potential child node.
     :param ancestor_id: Potential ancestor node.
     :return: True if descendant_id is under ancestor_id.
     """
     visited = set()
     stack = [ancestor_id]
+
     while stack:
         current = stack.pop()
         if current in visited:
             continue
         visited.add(current)
 
-        children = db.query(models.TreeNode.id).filter(models.TreeNode.parent_id == current).all()
-        child_ids = [c[0] for c in children]
+        result = await db.execute(
+            select(models.TreeNode.id).filter(models.TreeNode.parent_id == current)
+        )
+        child_ids = [row[0] for row in result.fetchall()]
 
         if descendant_id in child_ids:
             return True
 
         stack.extend(child_ids)
+
     return False
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Recursively locate and return the subtree rooted at a specific node ID
+# ─────────────────────────────────────────────────────────────────────────────
 def find_subtree_by_id(tree, target_id):
     """
     Recursively locate and return the subtree rooted at a specific node ID.
@@ -76,4 +91,3 @@ def find_subtree_by_id(tree, target_id):
         if child:
             return child
     return None
-
