@@ -1,34 +1,42 @@
 # TreeApi
-FastApi to execute tree CUD operations
+A modern FastAPI-based HTTP API to **create, read, update, and delete nodes** in a hierarchical tree structure (parent-child). Built with **async SQLAlchemy**, supports both **SQLite** (local dev) and **PostgreSQL** (production on Render).
+
 # Python 3.10+ is required to run this project
 
 # For Public Access URL
-https://treeapi.onrender.com
-https://treeapi.onrender.com/docs
 
-# Tree API – FastAPI Project
+- Http: [https://treeapi.onrender.com](https://treeapi.onrender.com)
+- Swagger: [https://treeapi.onrender.com/docs](https://treeapi.onrender.com/docs)
 
-This is a simple tree-building HTTP API built using **FastAPI**, **SQLite**, and **PostGres** hosted in cloud using **Renderer** supporting:
+## Features
 
-- ✅ Create nodes (with parent-child structure)
-- ✅ Fetch the entire tree as nested JSON
-- ✅ Delete all nodes (reset)
+- Create nodes with optional `parentId`
+- Fetch individual nodes or the **entire tree** in nested format
+- Update node `label` or reassign parent (with cycle protection)
+- Delete nodes individually or wipe all
+- Fully async with `asyncpg` / `aiosqlite`
+- Deployed on [Render](https://render.com)
+- Includes automated tests (with edge case coverage)
 
 ---
 
-## Project Structure
+## 📁 Project Structure
 
 ```
 app/
 ├── api/
-│   └── tree.py         # Route handlers
-├── crud.py             # DB interaction logic
-├── database.py         # DB session and engine
-├── models.py           # SQLAlchemy models
+│   └── tree.py         # FastAPI route handlers
+├── crud.py             # Async DB operations
+├── database.py         # DB engine/session logic
+├── models.py           # SQLAlchemy models (self-referential)
 ├── schemas.py          # Pydantic request/response models
+├── utils.py            # Recursive tree builders
+├── exceptions.py       # Custom exception classes
+tests/
+├── test_tree.py        # API integration and edge case tests
 main.py                 # FastAPI app entry point
-.env                    # DB and secret config
 requirements.txt
+.env                    # DB + secret config (local vs cloud)
 README.md
 ```
 
@@ -64,16 +72,22 @@ http://127.0.0.1:8000/docs
 
 ## API Endpoints
 
-| Method | Route        | Description                  |
-|--------|--------------|------------------------------|
-| POST   | `/api/tree`  | Add a node                   |
-| GET    | `/api/tree`  | Fetch the full tree          |
-| DELETE | `/api/tree`  | Delete all nodes (reset)     |
+
+| Method | Route               | Description                         |
+|--------|---------------------|-------------------------------------|
+| POST   | `/api/tree`         | Create a node                       |
+| GET    | `/api/tree`         | Fetch entire tree                   |
+| GET    | `/api/tree/{id}`    | Fetch subtree rooted at given node  |
+| PUT    | `/api/tree/{id}`    | Update label or parentId            |
+| DELETE | `/api/tree/{id}`    | Delete a specific node              |
+| DELETE | `/api/tree`         | Delete all nodes                    |
 
 ---
 
-## Example Payload (POST)
 
+## Example API Payloads
+
+### Create a root node:
 ```json
 {
   "label": "Root",
@@ -81,24 +95,16 @@ http://127.0.0.1:8000/docs
 }
 ```
 
-To create a child:
-
+### Create a child node:
 ```json
 {
-  "label": "Child",
+  "label": "Child A",
   "parentId": 1
 }
 ```
 
 ---
 
-## Notes
-
-- Uses **SQLite** for simplicity (`tree.db`)
-- Designed for clarity, not authentication (JWT ready if needed)
-- Swagger docs are auto-generated
-
----
 
 ## Requirements
 
@@ -106,15 +112,33 @@ See `requirements.txt` for dependencies.
 
 ---
 
-## Running Tests
 
-Use `pytest` to run the included unit test:
+## Running Tests
 
 ```bash
 python -m pytest
 ```
 
-This test will:
-- Create a root node
-- Confirm the API responds with HTTP 200
-- Validate that the label is stored correctly
+Tests cover:
+- Create, read, update, delete
+- Invalid parent references
+- Cycle prevention (A → B → A)
+- Node cleanup after tests
+
+---
+
+## Additional Highlights
+
+- `selectinload` used for async-safe eager loading of children
+- `remote_side=[id]` for correct parent-child resolution
+- Test coverage includes edge cases and rollback safety
+- Designed for dev clarity with potential for production hardening
+
+## Future Improvements
+
+- [ ] JWT authentication & user-scoped tree views
+- [ ] Docker Compose + PostgreSQL dev image
+- [ ] Optional rate limiting or caching
+
+##  Author
+Mothish Raj — [@Mothish97](https://github.com/Mothish97)
