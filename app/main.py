@@ -2,9 +2,11 @@
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
-from app.database import engine, Base
+from app.db.database import engine, Base
 from app.api import tree
-from app.exceptions import InvalidParentIDException, NodeNotFoundException
+from app.core.exceptions import InvalidParentIDException, NodeNotFoundException
+from app.api.auth_routes import router as auth_router
+
 import asyncio
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -41,4 +43,6 @@ async def node_not_found_handler(request: Request, exc: NodeNotFoundException):
 # ─────────────────────────────────────────────────────────────────────────────
 # Register routes
 # ─────────────────────────────────────────────────────────────────────────────
+
+app.include_router(auth_router)
 app.include_router(tree.router, prefix="/api")

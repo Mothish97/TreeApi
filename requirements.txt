@@ -6,6 +6,9 @@ python-dotenv
 pytest
 httpx
 psycopg2-binary
+passlib
+python-jose
+python-multipart
 # Python 3.10+ is required to run this project
 
 # Additional dependencies for async support and local development

@@ -3,8 +3,8 @@
 import httpx
 
 # Toggle between environments:
-BASE_URL = "http://127.0.0.1:8000"
-# BASE_URL = "https://treeapi.onrender.com"
+#BASE_URL = "http://127.0.0.1:8000"
+BASE_URL = "https://treeapi.onrender.com"
 
 def find_node(node_list, node_id):
     """Recursively search for a node with a given ID in a tree."""

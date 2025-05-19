@@ -75,6 +75,16 @@ class ResponseWrapper(BaseModel):
         None
     ]
 
+class UserCreate(BaseModel):
+    username: str
+    password: str
+
+class UserInDB(BaseModel):
+    id: int
+    username: str
+
+    class Config:
+        from_attributes = True
 
 # ────────────────────────────────────────────────────────────────
 # Resolve forward references in recursive models

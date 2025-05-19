@@ -2,8 +2,9 @@
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-from app import models
+from app.db import models
 from collections import defaultdict
+from passlib.context import CryptContext
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Constructs tree hierarchy from flat list of nodes in O(n)
@@ -91,3 +92,42 @@ def find_subtree_by_id(tree, target_id):
         if child:
             return child
     return None
+
+
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Password Hashing Context – Uses bcrypt for secure one-way hashing
+# ─────────────────────────────────────────────────────────────────────────────
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Hash Password – Converts plain password into secure bcrypt hash
+# ─────────────────────────────────────────────────────────────────────────────
+def get_password_hash(password: str) -> str:
+    """
+    Hashes a plain-text password using bcrypt.
+
+    Parameters:
+        password (str): The user's raw password input
+
+    Returns:
+        str: Hashed password
+    """
+    return pwd_context.hash(password)
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Verify Password – Compares raw password with stored hashed password
+# ─────────────────────────────────────────────────────────────────────────────
+def verify_password(plain_password: str, hashed_password: str) -> bool:
+    """
+    Verifies a raw password against its hashed version.
+
+    Parameters:
+        plain_password (str): User input password
+        hashed_password (str): Stored hashed password
+
+    Returns:
+        bool: True if match, False otherwise
+    """
+    return pwd_context.verify(plain_password, hashed_password)

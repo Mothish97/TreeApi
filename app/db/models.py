@@ -2,7 +2,7 @@
 
 from sqlalchemy import Column, Integer, String, ForeignKey
 from sqlalchemy.orm import relationship
-from app.database import Base
+from app.db.database import Base
 
 # ─────────────────────────────────────────────────────────────────────────────
 # TreeNode model: Represents a hierarchical tree structure using self-reference
@@ -37,3 +37,12 @@ class TreeNode(Base):
     # - `remote_side=[id]` is required to resolve ambiguity in self-reference
     # - `backref="children"` creates a reverse-access relationship
     # - `lazy="selectin"` allows async-safe eager loading for nested tree access
+
+
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String, unique=True, index=True)
+    hashed_password = Column(String)

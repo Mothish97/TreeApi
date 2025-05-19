@@ -2,9 +2,10 @@
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
-from app import models, schemas
-from app.exceptions import InvalidParentIDException, NodeNotFoundException
-from app.utils import build_tree, is_descendant
+from app.db import models
+from app.db import schemas
+from app.core.exceptions import InvalidParentIDException, NodeNotFoundException
+from app.core.utils import build_tree, is_descendant
 from sqlalchemy.orm import selectinload
 
 
