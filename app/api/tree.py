@@ -11,6 +11,8 @@ import logging
 from app.core.exceptions import InvalidParentIDException, NodeNotFoundException
 from app.core.utils import build_tree, find_subtree_by_id
 from app.core.auth import get_current_user
+from app.extension import limiter
+from fastapi import Request
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -20,7 +22,8 @@ logger = logging.getLogger(__name__)
 # Create a new tree node
 # ─────────────────────────────────────────────────────────────────────────────
 @router.post("/tree", response_model=schemas.ResponseWrapper, status_code=status.HTTP_201_CREATED)
-async def create_node(node: schemas.TreeNodeCreate, db: AsyncSession = Depends(get_db),user: dict = Depends(get_current_user)):
+@limiter.limit("5/minute") 
+async def create_node(request: Request, node: schemas.TreeNodeCreate, db: AsyncSession = Depends(get_db),user: dict = Depends(get_current_user)):
     """
     Create a new tree node.
 

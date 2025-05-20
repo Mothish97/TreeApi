@@ -15,3 +15,6 @@ python-multipart
 asyncpg
 aiosqlite
 pytest-asyncio
+# for rate limiting
+slowapi>=0.1.4
+redis>=5.0.0  
