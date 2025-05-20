@@ -212,3 +212,20 @@ async def delete_all_nodes(db: AsyncSession = Depends(get_db)):
     except Exception as e:
         logger.error(f"Error deleting all nodes: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal Server Error")
+    
+
+@router.post("/tree/clone", response_model=schemas.ResponseWrapper)
+async def clone_all_nodes(node: schemas.TreeNodeCloneAll,db: AsyncSession = Depends(get_db)):
+    """
+
+    """
+    try:
+        success = await crud.clone_node(db,node.nodeId,node.parentId)
+        return {
+            "code": 201,
+            "message": "Nodes cloned",
+            "data": {"isCreated": success}
+        }
+    except Exception as e:
+        logger.error(f"Error cloning all nodes: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail="Internal Server Error")

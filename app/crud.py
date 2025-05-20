@@ -196,3 +196,34 @@ async def update_node(db: AsyncSession, node_id: int, data: schemas.TreeNodeCrea
     node_with_children = result.scalar_one()
 
     return schemas.TreeNodeResponse.model_validate(node_with_children)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Clones the node and add it to the parent
+# ─────────────────────────────────────────────────────────────────────────────
+async  def clone_node(db: AsyncSession, node_id: int , parent_id: int):
+    
+    allNodes = await get_node_by_id(db,node_id); 
+    nodeDct = build_tree(allNodes)
+
+    # Create and commit the new TreeNode
+    db_node = models.TreeNode(label=nodeDct["label"], parent_id=parent_id)
+    db.add(db_node)
+    await db.commit()
+    await db.refresh(db_node)
+    # Re-fetch the node with eager-loaded children before returning
+    # Required for Pydantic to access children in async environment
+    stmt = select(models.TreeNode).options(selectinload(models.TreeNode.children)).where(models.TreeNode.id == db_node.id)
+    result = await db.execute(stmt)
+    node_with_children = result.scalar_one()
+    
+    for node in nodeDct["children"]:
+        await  clone_node(db, node , db_node.id)
+
+
+
+
+
+
+
+

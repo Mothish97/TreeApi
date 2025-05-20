@@ -77,6 +77,20 @@ class ResponseWrapper(BaseModel):
 
 
 # ────────────────────────────────────────────────────────────────
+# Output schema for DELETE ALL operation
+# Used in DELETE /tree response
+# ────────────────────────────────────────────────────────────────
+class TreeNodeCloneAll(BaseModel):
+    """
+    Schema representing the success status of a delete-all operation.
+
+    Fields:
+        isDeleted (bool): Indicates if the operation succeeded.
+    """
+    nodeId: int
+    parentId: int
+
+# ────────────────────────────────────────────────────────────────
 # Resolve forward references in recursive models
 # Required when a model refers to itself (TreeNodeResponse.children)
 # ────────────────────────────────────────────────────────────────
