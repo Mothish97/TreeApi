@@ -4,7 +4,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 from app import models, schemas
 from app.exceptions import InvalidParentIDException, NodeNotFoundException
-from app.utils import build_tree, is_descendant
+from app.utils import build_tree, is_descendant,find_subtree_by_id
 from sqlalchemy.orm import selectinload
 
 
@@ -62,9 +62,7 @@ async def get_all_nodes(db: AsyncSession):
     Returns:
         List[TreeNode]: List of all TreeNode objects with eager-loaded children.
     """
-    result = await db.execute(
-        select(models.TreeNode).options(selectinload(models.TreeNode.children))
-    )
+    result = await db.execute(select(models.TreeNode))
     return result.scalars().all()
 
 
@@ -87,7 +85,6 @@ async def get_node_by_id(db: AsyncSession, node_id: int) -> schemas.TreeNodeResp
     """
     result = await db.execute(
         select(models.TreeNode)
-        .options(selectinload(models.TreeNode.children))
         .filter(models.TreeNode.id == node_id)
     )
     node = result.scalar_one_or_none()
@@ -201,25 +198,34 @@ async def update_node(db: AsyncSession, node_id: int, data: schemas.TreeNodeCrea
 # ─────────────────────────────────────────────────────────────────────────────
 # Clones the node and add it to the parent
 # ─────────────────────────────────────────────────────────────────────────────
-async  def clone_node(db: AsyncSession, node_id: int , parent_id: int):
-    
-    allNodes = await get_node_by_id(db,node_id); 
-    nodeDct = build_tree(allNodes)
 
-    # Create and commit the new TreeNode
-    db_node = models.TreeNode(label=nodeDct["label"], parent_id=parent_id)
+async def clone_node(db: AsyncSession, node_id: int, parent_id: int, tree_dicts=None):
+    """
+    clones a node and all its children under a new parent.
+    Passes down the tree dict to avoid rebuilding in every recursive call.
+    """
+
+    # Step 1: Load and build the tree only once at the top level
+    if tree_dicts is None:
+        all_nodes = await get_all_nodes(db)
+        tree_dicts = build_tree(all_nodes)
+
+    # Step 2: Find the subtree for the node to clone
+    node_dict = find_subtree_by_id(tree_dicts, node_id)
+    if not node_dict:
+        raise Exception(f"Node {node_id} not found in tree.")
+
+    # Step 3: Insert the current node
+    db_node = models.TreeNode(label=node_dict["label"], parent_id=parent_id)
     db.add(db_node)
     await db.commit()
     await db.refresh(db_node)
-    # Re-fetch the node with eager-loaded children before returning
-    # Required for Pydantic to access children in async environment
-    stmt = select(models.TreeNode).options(selectinload(models.TreeNode.children)).where(models.TreeNode.id == db_node.id)
-    result = await db.execute(stmt)
-    node_with_children = result.scalar_one()
-    
-    for node in nodeDct["children"]:
-        await  clone_node(db, node , db_node.id)
 
+    # Step 4: Recursively clone children
+    for child in node_dict.get("children", []):
+        await clone_node(db, child["id"], db_node.id, tree_dicts)
+
+    return True
 
 
 

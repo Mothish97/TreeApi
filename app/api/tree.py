@@ -224,8 +224,10 @@ async def clone_all_nodes(node: schemas.TreeNodeCloneAll,db: AsyncSession = Depe
         return {
             "code": 201,
             "message": "Nodes cloned",
-            "data": {"isCreated": success}
+            "data": success
         }
     except Exception as e:
         logger.error(f"Error cloning all nodes: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Internal Server Error")
+    
+    
